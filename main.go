@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 )
 
 func checkHeader(resp *http.Response, name string) bool {
@@ -42,6 +43,17 @@ func checkCertificate(resp *http.Response) {
 	fmt.Println("Subject:", cert.Subject.CommonName)
 	fmt.Println("Issuer:", cert.Issuer.CommonName)
 	fmt.Println("Expires:", cert.NotAfter)
+	daysRemaining := int(time.Until(cert.NotAfter).Hours() / 24)
+
+	if daysRemaining < 0 {
+		fmt.Println("[WARNING] Certificate is expired")
+	} else {
+		fmt.Println("Days until expiration:", daysRemaining)
+
+		if daysRemaining < 30 {
+			fmt.Println("[WARNING] Certificate expires in less than 30 days")
+		}
+	}
 }
 func tlsVersion(version uint16) string {
 	switch version {
@@ -65,13 +77,23 @@ func main() {
 	}
 
 	url := os.Args[1]
-	resp, err := http.Get(url)
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			fmt.Println("[REDIRECT]", req.URL.String())
+			return nil
+		},
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Println("Request failed:", err)
 		return
 	}
 	defer resp.Body.Close()
-
+	fmt.Println("HTTP Information:")
+	fmt.Println("Status:", resp.Status)
+	fmt.Println("Status Code:", resp.StatusCode)
+	fmt.Println("Final URL:", resp.Request.URL.String())
 	fmt.Println("Security Headers:")
 	headers := []string{
 		"Content-Security-Policy",
