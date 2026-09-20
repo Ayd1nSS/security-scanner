@@ -88,8 +88,14 @@ func main() {
 	}
 	redirects := []string{}
 	client := &http.Client{
+		Timeout: 10 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			fmt.Println("[REDIRECT]", req.URL.String())
+			redirects = append(redirects, req.URL.String())
+
+			if !jsonOutput {
+				fmt.Println("[REDIRECT]", req.URL.String())
+			}
+
 			return nil
 		},
 	}
@@ -97,6 +103,11 @@ func main() {
 	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Println("Request failed:", err)
+
+		if os.IsTimeout(err) {
+			fmt.Println("Reason: request timed out")
+		}
+
 		return
 	}
 	defer resp.Body.Close()
@@ -105,6 +116,8 @@ func main() {
 	fmt.Println("Status Code:", resp.StatusCode)
 	fmt.Println("Final URL:", resp.Request.URL.String())
 	findings := scanner.CheckHeaders(resp)
+	findings = append(findings, scanner.CheckCookies(resp)...)
+	findings = append(findings, scanner.CheckServerHeader(resp)...)
 	var tlsVersionName string
 	var cipherSuiteName string
 
@@ -146,5 +159,9 @@ func main() {
 	}
 	checkTLS(resp)
 	checkCertificate(resp)
-
+	for _, finding := range findings {
+		if finding.Severity == "HIGH" {
+			os.Exit(1)
+		}
+	}
 }

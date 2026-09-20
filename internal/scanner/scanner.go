@@ -60,3 +60,60 @@ func CheckHeaders(resp *http.Response) []Finding {
 
 	return findings
 }
+func CheckCookies(resp *http.Response) []Finding {
+	var findings []Finding
+
+	for _, cookie := range resp.Cookies() {
+		if !cookie.Secure {
+			findings = append(findings, Finding{
+				Name:     "Cookie Secure flag",
+				Status:   "WARN",
+				Severity: "MEDIUM",
+				Details:  "Cookie " + cookie.Name + " is missing the Secure flag",
+			})
+		}
+
+		if !cookie.HttpOnly {
+			findings = append(findings, Finding{
+				Name:     "Cookie HttpOnly flag",
+				Status:   "WARN",
+				Severity: "MEDIUM",
+				Details:  "Cookie " + cookie.Name + " is missing the HttpOnly flag",
+			})
+		}
+
+		if cookie.SameSite == http.SameSiteDefaultMode {
+			findings = append(findings, Finding{
+				Name:     "Cookie SameSite",
+				Status:   "WARN",
+				Severity: "LOW",
+				Details:  "Cookie " + cookie.Name + " does not explicitly define SameSite",
+			})
+		}
+	}
+
+	return findings
+}
+func CheckServerHeader(resp *http.Response) []Finding {
+	server := resp.Header.Get("Server")
+
+	if server == "" {
+		return []Finding{
+			{
+				Name:     "Server Header",
+				Status:   "PASS",
+				Severity: "NONE",
+				Details:  "Server header is not exposed",
+			},
+		}
+	}
+
+	return []Finding{
+		{
+			Name:     "Server Header",
+			Status:   "WARN",
+			Severity: "LOW",
+			Details:  "Server header exposes: " + server,
+		},
+	}
+}

@@ -33,6 +33,7 @@ func TestCheckHeaders(t *testing.T) {
 		}
 	}
 }
+
 func TestMissingHeaderSeverity(t *testing.T) {
 	resp := &http.Response{
 		Header: http.Header{},
@@ -61,5 +62,47 @@ func TestMissingHeaderSeverity(t *testing.T) {
 					finding.Severity)
 			}
 		}
+	}
+}
+func TestCheckCookies(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{
+			"Set-Cookie": []string{
+				"session=insecure-demo",
+			},
+		},
+	}
+
+	findings := CheckCookies(resp)
+
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 cookie findings, got %d", len(findings))
+	}
+
+	for _, finding := range findings {
+		if finding.Status != "WARN" {
+			t.Errorf("expected cookie finding to be WARN, got %s", finding.Status)
+		}
+	}
+}
+func TestCheckServerHeader(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{
+			"Server": []string{"nginx/1.24.0"},
+		},
+	}
+
+	findings := CheckServerHeader(resp)
+
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings))
+	}
+
+	if findings[0].Status != "WARN" {
+		t.Errorf("expected Server Header to be WARN, got %s", findings[0].Status)
+	}
+
+	if findings[0].Severity != "LOW" {
+		t.Errorf("expected Server Header severity LOW, got %s", findings[0].Severity)
 	}
 }
