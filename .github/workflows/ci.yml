@@ -24,3 +24,6 @@ jobs:
 
       - name: Build scanner
         run: go build -o security-scanner .
+     
+       - name: Build Docker image
+        run: docker build -t security-scanner .
