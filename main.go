@@ -2,7 +2,9 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"hello-go/internal/scanner"
 	"net/http"
 	"os"
 	"time"
@@ -71,12 +73,20 @@ func tlsVersion(version uint16) string {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: security-scanner <URL>")
+
+	jsonOutput := false
+	url := ""
+
+	if len(os.Args) == 2 {
+		url = os.Args[1]
+	} else if len(os.Args) == 3 && os.Args[2] == "--json" {
+		url = os.Args[1]
+		jsonOutput = true
+	} else {
+		fmt.Println("Usage: security-scanner <URL> [--json]")
 		return
 	}
-
-	url := os.Args[1]
+	redirects := []string{}
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			fmt.Println("[REDIRECT]", req.URL.String())
@@ -94,28 +104,46 @@ func main() {
 	fmt.Println("Status:", resp.Status)
 	fmt.Println("Status Code:", resp.StatusCode)
 	fmt.Println("Final URL:", resp.Request.URL.String())
-	fmt.Println("Security Headers:")
-	headers := []string{
-		"Content-Security-Policy",
-		"Strict-Transport-Security",
-		"X-Content-Type-Options",
-		"X-Frame-Options",
-		"Referrer-Policy",
-		"Permissions-Policy",
-	}
-	found := 0
-	for _, header := range headers {
-		if checkHeader(resp, header) {
-			found++
-		}
-	}
-	missing := len(headers) - found
+	findings := scanner.CheckHeaders(resp)
+	var tlsVersionName string
+	var cipherSuiteName string
 
-	fmt.Println()
-	fmt.Println("Summary:")
-	fmt.Println("Headers checked:", len(headers))
-	fmt.Println("Headers present:", found)
-	fmt.Println("Headers missing:", missing)
+	if resp.TLS != nil {
+		tlsVersionName = tlsVersion(resp.TLS.Version)
+		cipherSuiteName = tls.CipherSuiteName(resp.TLS.CipherSuite)
+	}
+
+	result := scanner.ScanResult{
+		Target:      url,
+		Status:      resp.Status,
+		StatusCode:  resp.StatusCode,
+		FinalURL:    resp.Request.URL.String(),
+		Redirects:   redirects,
+		Findings:    findings,
+		TLSVersion:  tlsVersionName,
+		CipherSuite: cipherSuiteName,
+	}
+	if jsonOutput {
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			fmt.Println("Failed to generate JSON:", err)
+			return
+		}
+
+		fmt.Println(string(data))
+		return
+	}
+
+	fmt.Println("Security Headers:")
+
+	for _, finding := range findings {
+		fmt.Printf("[%s] %s - %s - %s\n",
+			finding.Status,
+			finding.Severity,
+			finding.Name,
+			finding.Details,
+		)
+	}
 	checkTLS(resp)
 	checkCertificate(resp)
 
